@@ -2,7 +2,9 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { AppState, Client, Loan, Payment, LoanRequest, TimelineEvent, FundAdjustment } from '../types';
 
-// Obtener variables de forma segura
+/**
+ * Recupera variables de entorno con fallback para evitar errores de referencia
+ */
 const getEnv = (key: string): string => {
   try {
     return (window as any).process?.env?.[key] || (import.meta as any).env?.[key] || '';
@@ -11,28 +13,36 @@ const getEnv = (key: string): string => {
   }
 };
 
-const supabaseUrl = getEnv('SUPABASE_URL');
-const supabaseKey = getEnv('SUPABASE_ANON_KEY') || getEnv('SUPABASE_KEY');
-
+/**
+ * Singleton del cliente de Supabase
+ */
 let supabaseInstance: SupabaseClient | null = null;
 
-if (supabaseUrl && supabaseKey) {
-  try {
-    supabaseInstance = createClient(supabaseUrl, supabaseKey);
-  } catch (err) {
-    console.error("Error al inicializar el cliente de Supabase:", err);
-  }
-}
+export const getSupabaseClient = () => {
+  if (supabaseInstance) return supabaseInstance;
 
-export const supabase = supabaseInstance;
+  const supabaseUrl = getEnv('SUPABASE_URL');
+  const supabaseKey = getEnv('SUPABASE_ANON_KEY') || getEnv('SUPABASE_KEY');
+
+  if (supabaseUrl && supabaseKey) {
+    try {
+      supabaseInstance = createClient(supabaseUrl, supabaseKey);
+      return supabaseInstance;
+    } catch (err) {
+      console.error("Fallo crítico al crear cliente Supabase:", err);
+    }
+  }
+  return null;
+};
 
 export const loadFromCloud = async (): Promise<AppState | null> => {
-  try {
-    if (!supabase) {
-      console.warn("Supabase no configurado. Usando modo LocalStorage.");
-      return null;
-    }
+  const client = getSupabaseClient();
+  if (!client) {
+    console.log("Supabase no configurado. Trabajando en modo local.");
+    return null;
+  }
 
+  try {
     const [
       { data: clients },
       { data: loans },
@@ -42,13 +52,13 @@ export const loadFromCloud = async (): Promise<AppState | null> => {
       { data: history },
       { data: timeline }
     ] = await Promise.all([
-      supabase.from('clients').select('*'),
-      supabase.from('loans').select('*'),
-      supabase.from('payments').select('*'),
-      supabase.from('loan_requests').select('*'),
-      supabase.from('system_funds').select('available_funds').single(),
-      supabase.from('funds_history').select('*'),
-      supabase.from('timeline').select('*')
+      client.from('clients').select('*'),
+      client.from('loans').select('*'),
+      client.from('payments').select('*'),
+      client.from('loan_requests').select('*'),
+      client.from('system_funds').select('available_funds').single(),
+      client.from('funds_history').select('*'),
+      client.from('timeline').select('*')
     ]);
 
     const mappedClients: Client[] = (clients || []).map(c => ({
@@ -108,15 +118,16 @@ export const loadFromCloud = async (): Promise<AppState | null> => {
       currentUser: null
     };
   } catch (error) {
-    console.error("Error cargando datos de Supabase:", error);
+    console.error("Error en sincronización Cloud:", error);
     return null;
   }
 };
 
 export const db = {
   async upsertClient(client: Client) {
-    if (!supabase) return;
-    return await supabase.from('clients').upsert({
+    const sc = getSupabaseClient();
+    if (!sc) return;
+    return await sc.from('clients').upsert({
       national_id: client.nationalId,
       username: client.username,
       name: client.name,
@@ -127,8 +138,9 @@ export const db = {
     });
   },
   async insertLoan(loan: Loan) {
-    if (!supabase) return;
-    return await supabase.from('loans').insert({
+    const sc = getSupabaseClient();
+    if (!sc) return;
+    return await sc.from('loans').insert({
       client_id: loan.clientId,
       amount: loan.amount,
       interest_rate: loan.interestRate,
@@ -140,16 +152,18 @@ export const db = {
     });
   },
   async updateLoanStatus(loanId: string, totalOwed: number, totalPaid: number, status: string) {
-    if (!supabase) return;
-    return await supabase.from('loans').update({
+    const sc = getSupabaseClient();
+    if (!sc) return;
+    return await sc.from('loans').update({
       total_owed: totalOwed,
       total_paid: totalPaid,
       status: status
     }).eq('id', loanId);
   },
   async insertPayment(payment: Payment) {
-    if (!supabase) return;
-    return await supabase.from('payments').insert({
+    const sc = getSupabaseClient();
+    if (!sc) return;
+    return await sc.from('payments').insert({
       loan_id: payment.loanId,
       amount: payment.amount,
       method: payment.method,
@@ -157,12 +171,14 @@ export const db = {
     });
   },
   async updateAvailableFunds(amount: number) {
-    if (!supabase) return;
-    return await supabase.from('system_funds').update({ available_funds: amount }).eq('id', 1);
+    const sc = getSupabaseClient();
+    if (!sc) return;
+    return await sc.from('system_funds').update({ available_funds: amount }).eq('id', 1);
   },
   async deleteClient(clientId: string) {
-    if (!supabase) return;
-    return await supabase.from('clients').delete().eq('id', clientId);
+    const sc = getSupabaseClient();
+    if (!sc) return;
+    return await sc.from('clients').delete().eq('id', clientId);
   }
 };
 

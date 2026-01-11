@@ -5,6 +5,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FinTech Pro | Sistema de Préstamos</title>
+    <!-- Shim crítico para evitar que las librerías fallen por falta de process.env -->
+    <script>
+      window.process = { env: { 
+        API_KEY: "", 
+        SUPABASE_URL: "", 
+        SUPABASE_ANON_KEY: "" 
+      } };
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -13,10 +21,6 @@
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     </style>
-    <!-- Shim para compatibilidad con process.env en el navegador -->
-    <script>
-      window.process = { env: {} };
-    </script>
 <script type="importmap">
 {
   "imports": {
