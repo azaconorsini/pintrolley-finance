@@ -1,0 +1,7 @@
+{
+  "name": "Pintrolley: Loan Management Suite",
+  "description": "A comprehensive microcredit and loan management system for fintechs and credit unions, featuring AI insights, automated billing, and real-time dashboards.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
