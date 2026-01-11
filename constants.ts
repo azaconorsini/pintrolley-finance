@@ -13,31 +13,12 @@ export const INITIAL_STATE: AppState = {
       role: 'ADMIN'
     }
   ],
-  clients: [
-    {
-      id: 'c1',
-      nationalId: '1020304050',
-      username: 'juanp',
-      name: 'Juan Pérez',
-      email: 'juan.perez@example.com',
-      phone: '+57 300 123 4567',
-      address: 'Calle 123 #45-67, Bogotá',
-      registrationDate: '2023-10-01',
-      status: 'ACTIVE'
-    }
-  ],
+  clients: [],
   loans: [],
   payments: [],
   timeline: [],
-  availableFunds: 10000000,
-  fundsHistory: [
-    {
-      id: 'f1',
-      amount: 10000000,
-      date: new Date().toISOString(),
-      notes: 'Capital semilla de operación'
-    }
-  ],
+  availableFunds: 0,
+  fundsHistory: [],
   loanRequests: []
 };
 
