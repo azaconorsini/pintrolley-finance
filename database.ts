@@ -1,46 +1,28 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { AppState, Client, Loan, Payment, LoanRequest, TimelineEvent, FundAdjustment } from '../types';
+import { AppState, Client, Loan, Payment } from '../types';
 
-/**
- * Recupera variables de entorno con fallback para evitar errores de referencia
- */
-const getEnv = (key: string): string => {
-  try {
-    return (window as any).process?.env?.[key] || (import.meta as any).env?.[key] || '';
-  } catch {
-    return '';
-  }
-};
+const SUPABASE_URL = process.env.SUPABASE_URL || (window as any).process?.env?.SUPABASE_URL || 'https://zjounhlaffzxxrgjylsb.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || (window as any).process?.env?.SUPABASE_ANON_KEY || 'sb_publishable_kKc46uzgd05dFhYHyJVGwQ_0MQ36oCj';
 
-/**
- * Singleton del cliente de Supabase
- */
-let supabaseInstance: SupabaseClient | null = null;
+let clientInstance: SupabaseClient | null = null;
 
-export const getSupabaseClient = () => {
-  if (supabaseInstance) return supabaseInstance;
-
-  const supabaseUrl = getEnv('SUPABASE_URL');
-  const supabaseKey = getEnv('SUPABASE_ANON_KEY') || getEnv('SUPABASE_KEY');
-
-  if (supabaseUrl && supabaseKey) {
+export const getSupabase = () => {
+  if (clientInstance) return clientInstance;
+  if (SUPABASE_URL && SUPABASE_KEY) {
     try {
-      supabaseInstance = createClient(supabaseUrl, supabaseKey);
-      return supabaseInstance;
-    } catch (err) {
-      console.error("Fallo crítico al crear cliente Supabase:", err);
+      clientInstance = createClient(SUPABASE_URL, SUPABASE_KEY);
+      return clientInstance;
+    } catch (e) {
+      console.error("Error conectando a Supabase:", e);
     }
   }
   return null;
 };
 
 export const loadFromCloud = async (): Promise<AppState | null> => {
-  const client = getSupabaseClient();
-  if (!client) {
-    console.log("Supabase no configurado. Trabajando en modo local.");
-    return null;
-  }
+  const supabase = getSupabase();
+  if (!supabase) return null;
 
   try {
     const [
@@ -48,72 +30,60 @@ export const loadFromCloud = async (): Promise<AppState | null> => {
       { data: loans },
       { data: payments },
       { data: requests },
-      { data: funds },
-      { data: history },
-      { data: timeline }
+      { data: funds }
     ] = await Promise.all([
-      client.from('clients').select('*'),
-      client.from('loans').select('*'),
-      client.from('payments').select('*'),
-      client.from('loan_requests').select('*'),
-      client.from('system_funds').select('available_funds').single(),
-      client.from('funds_history').select('*'),
-      client.from('timeline').select('*')
+      supabase.from('clients').select('*'),
+      supabase.from('loans').select('*'),
+      supabase.from('payments').select('*'),
+      supabase.from('loan_requests').select('*'),
+      supabase.from('system_funds').select('available_funds').single()
     ]);
 
-    const mappedClients: Client[] = (clients || []).map(c => ({
-      id: c.id,
-      nationalId: c.national_id,
-      username: c.username,
-      name: c.name,
-      email: c.email,
-      phone: c.phone,
-      address: c.address,
-      registrationDate: c.registration_date,
-      status: c.status
-    }));
-
-    const mappedLoans: Loan[] = (loans || []).map(l => ({
-      id: l.id,
-      clientId: l.client_id,
-      amount: Number(l.amount),
-      interestRate: Number(l.interest_rate),
-      term: l.term,
-      frequency: l.frequency,
-      startDate: l.start_date,
-      status: l.status,
-      totalPaid: Number(l.total_paid),
-      totalOwed: Number(l.total_owed)
-    }));
-
-    const mappedPayments: Payment[] = (payments || []).map(p => ({
-      id: p.id,
-      loanId: p.loan_id,
-      amount: Number(p.amount),
-      date: p.date,
-      method: p.method,
-      notes: p.notes
-    }));
-
-    const mappedRequests: LoanRequest[] = (requests || []).map(r => ({
-      id: r.id,
-      nationalId: r.national_id,
-      name: r.name,
-      email: r.email,
-      phone: r.phone,
-      amount: Number(r.amount),
-      date: r.date,
-      status: r.status
-    }));
-
     return {
-      clients: mappedClients,
-      loans: mappedLoans,
-      payments: mappedPayments,
-      loanRequests: mappedRequests,
+      clients: (clients || []).map(c => ({
+        id: c.id,
+        nationalId: c.national_id,
+        username: c.username,
+        name: c.name,
+        email: c.email,
+        phone: c.phone,
+        address: c.address,
+        registrationDate: c.registration_date,
+        status: c.status
+      })),
+      loans: (loans || []).map(l => ({
+        id: l.id,
+        clientId: l.client_id,
+        amount: Number(l.amount),
+        interestRate: Number(l.interest_rate),
+        term: l.term,
+        frequency: l.frequency,
+        startDate: l.start_date,
+        status: l.status,
+        totalPaid: Number(l.total_paid),
+        totalOwed: Number(l.total_owed)
+      })),
+      payments: (payments || []).map(p => ({
+        id: p.id,
+        loanId: p.loan_id,
+        amount: Number(p.amount),
+        date: p.date,
+        method: p.method,
+        notes: p.notes
+      })),
+      loanRequests: (requests || []).map(r => ({
+        id: r.id,
+        nationalId: r.national_id,
+        name: r.name,
+        email: r.email,
+        phone: r.phone,
+        amount: Number(r.amount),
+        date: r.date,
+        status: r.status
+      })),
       availableFunds: funds?.available_funds ? Number(funds.available_funds) : 0,
-      fundsHistory: (history || []).map(h => ({ id: h.id, amount: Number(h.amount), date: h.date, notes: h.notes })),
-      timeline: (timeline || []).map(t => ({ id: t.id, clientId: t.client_id, type: t.type, date: t.date, description: t.description, amount: t.amount ? Number(t.amount) : undefined })),
+      fundsHistory: [],
+      timeline: [],
       admins: [], 
       currentUser: null
     };
@@ -125,9 +95,9 @@ export const loadFromCloud = async (): Promise<AppState | null> => {
 
 export const db = {
   async upsertClient(client: Client) {
-    const sc = getSupabaseClient();
-    if (!sc) return;
-    return await sc.from('clients').upsert({
+    const s = getSupabase();
+    if (!s) return;
+    return await s.from('clients').upsert({
       national_id: client.nationalId,
       username: client.username,
       name: client.name,
@@ -138,9 +108,9 @@ export const db = {
     });
   },
   async insertLoan(loan: Loan) {
-    const sc = getSupabaseClient();
-    if (!sc) return;
-    return await sc.from('loans').insert({
+    const s = getSupabase();
+    if (!s) return;
+    return await s.from('loans').insert({
       client_id: loan.clientId,
       amount: loan.amount,
       interest_rate: loan.interestRate,
@@ -152,18 +122,18 @@ export const db = {
     });
   },
   async updateLoanStatus(loanId: string, totalOwed: number, totalPaid: number, status: string) {
-    const sc = getSupabaseClient();
-    if (!sc) return;
-    return await sc.from('loans').update({
+    const s = getSupabase();
+    if (!s) return;
+    return await s.from('loans').update({
       total_owed: totalOwed,
       total_paid: totalPaid,
       status: status
     }).eq('id', loanId);
   },
   async insertPayment(payment: Payment) {
-    const sc = getSupabaseClient();
-    if (!sc) return;
-    return await sc.from('payments').insert({
+    const s = getSupabase();
+    if (!s) return;
+    return await s.from('payments').insert({
       loan_id: payment.loanId,
       amount: payment.amount,
       method: payment.method,
@@ -171,14 +141,14 @@ export const db = {
     });
   },
   async updateAvailableFunds(amount: number) {
-    const sc = getSupabaseClient();
-    if (!sc) return;
-    return await sc.from('system_funds').update({ available_funds: amount }).eq('id', 1);
+    const s = getSupabase();
+    if (!s) return;
+    return await s.from('system_funds').update({ available_funds: amount }).eq('id', 1);
   },
   async deleteClient(clientId: string) {
-    const sc = getSupabaseClient();
-    if (!sc) return;
-    return await sc.from('clients').delete().eq('id', clientId);
+    const s = getSupabase();
+    if (!s) return;
+    return await s.from('clients').delete().eq('id', clientId);
   }
 };
 

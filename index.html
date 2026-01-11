@@ -5,38 +5,41 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FinTech Pro | Sistema de Préstamos</title>
-    <!-- Shim crítico para evitar que las librerías fallen por falta de process.env -->
+    <!-- Shim esencial: define el objeto process antes que cualquier otra carga -->
     <script>
-      window.process = { env: { 
-        API_KEY: "", 
-        SUPABASE_URL: "", 
-        SUPABASE_ANON_KEY: "" 
-      } };
+      window.process = { 
+        env: { 
+          NODE_ENV: 'production',
+          API_KEY: "AIzaSyDevTb9m5o4eDS8ObF459TAz9w1619azCQ",
+          SUPABASE_URL: "https://zjounhlaffzxxrgjylsb.supabase.co",
+          SUPABASE_ANON_KEY: "sb_publishable_kKc46uzgd05dFhYHyJVGwQ_0MQ36oCj"
+        } 
+      };
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; background-color: #f8fafc; }
+        #root { min-height: 100vh; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     </style>
-<script type="importmap">
-{
-  "imports": {
-    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "recharts": "https://esm.sh/recharts@^3.6.0",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.7"
-  }
-}
-</script>
+    <script type="importmap">
+    {
+      "imports": {
+        "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+        "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+        "react/": "https://esm.sh/react@^19.2.3/",
+        "react": "https://esm.sh/react@^19.2.3",
+        "recharts": "https://esm.sh/recharts@^3.6.0",
+        "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.7"
+      }
+    }
+    </script>
 </head>
-<body class="bg-slate-50 text-slate-900">
+<body>
     <div id="root"></div>
-    <!-- Punto de entrada de la aplicación React -->
     <script type="module" src="./index.tsx"></script>
 </body>
 </html>
