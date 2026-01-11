@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FinTech Pro | Sistema de Préstamos</title>
-    <!-- Shim esencial: define el objeto process antes que cualquier otra carga -->
+    <!-- Shim esencial: define el objeto process globalmente antes de cargar cualquier módulo -->
     <script>
       window.process = { 
         env: { 
@@ -15,6 +15,8 @@
           SUPABASE_ANON_KEY: "sb_publishable_kKc46uzgd05dFhYHyJVGwQ_0MQ36oCj"
         } 
       };
+      // Referencia global para compatibilidad con librerías que buscan 'process' directamente
+      var process = window.process;
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
