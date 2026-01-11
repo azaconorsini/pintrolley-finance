@@ -11,7 +11,7 @@ import FundsManager from './components/FundsManager';
 import LoginForm from './components/LoginForm';
 import ClientPortal from './components/ClientPortal';
 import ClientDetail from './components/ClientDetail';
-import { AppState, Client, Loan, Payment, AdminUser, LoanRequest } from './types';
+import { AppState, Client, Loan, Payment, AdminUser, LoanRequest, FundAdjustment } from './types';
 import { INITIAL_STATE } from './constants';
 import { loadFromCloud, db, saveToLocalFallback } from './services/database';
 
@@ -29,7 +29,7 @@ const App: React.FC = () => {
     const initApp = async () => {
       const cloudData = await loadFromCloud();
       if (cloudData) {
-        setState(prev => ({ ...prev, ...cloudData, admins: prev.admins }));
+        setState(prev => ({ ...prev, ...cloudData, admins: prev.admins.length ? prev.admins : INITIAL_STATE.admins }));
       } else {
         const saved = localStorage.getItem('fintech_pro_state_v3_pintrolley');
         if (saved) setState(JSON.parse(saved));
@@ -60,10 +60,7 @@ const App: React.FC = () => {
   };
 
   const registerClient = async (client: Client) => {
-    // 1. Guardar en Nube
     await db.upsertClient(client);
-    
-    // 2. Actualizar Estado Local
     setState(prev => ({
       ...prev,
       clients: [...prev.clients, client],
@@ -82,10 +79,7 @@ const App: React.FC = () => {
     if (!clientToDelete) return;
 
     if (window.confirm(`¿Eliminar permanentemente a ${clientToDelete.name}?`)) {
-      // 1. Borrar de la nube (CASCADE borrará préstamos y pagos en Supabase)
       await db.deleteClient(clientId);
-
-      // 2. Sincronizar localmente
       setState(prev => {
         const relatedLoans = prev.loans.filter(l => l.clientId === clientId).map(l => l.id);
         return {
@@ -97,23 +91,20 @@ const App: React.FC = () => {
           timeline: prev.timeline.filter(t => t.clientId !== clientId)
         };
       });
-
       if (selectedClient?.id === clientId) setSelectedClient(null);
     }
   }, [state.clients, selectedClient]);
 
   const addLoan = async (loan: Loan) => {
     if (state.availableFunds < loan.amount) {
-      alert("Fondos insuficientes.");
+      alert("Fondos insuficientes en caja.");
       return;
     }
 
-    // 1. Guardar en Nube
     await db.insertLoan(loan);
     const newFunds = state.availableFunds - loan.amount;
     await db.updateAvailableFunds(newFunds);
 
-    // 2. Estado local
     setState(prev => ({
       ...prev,
       availableFunds: newFunds,
@@ -130,9 +121,7 @@ const App: React.FC = () => {
   };
 
   const addPayment = async (payment: Payment) => {
-    // 1. Guardar en Nube
     await db.insertPayment(payment);
-    
     const loanToUpdate = state.loans.find(l => l.id === payment.loanId);
     if (loanToUpdate) {
       const newTotalOwed = Math.max(0, loanToUpdate.totalOwed - payment.amount);
@@ -143,7 +132,6 @@ const App: React.FC = () => {
       const newFunds = state.availableFunds + payment.amount;
       await db.updateAvailableFunds(newFunds);
 
-      // 2. Estado local
       setState(prev => ({
         ...prev,
         availableFunds: newFunds,
@@ -161,15 +149,100 @@ const App: React.FC = () => {
     }
   };
 
+  const handleAddFunds = async (amount: number, notes: string) => {
+    const newFunds = state.availableFunds + amount;
+    const adjustment: FundAdjustment = {
+      id: `f${Date.now()}`,
+      amount,
+      date: new Date().toISOString(),
+      notes
+    };
+
+    await db.updateAvailableFunds(newFunds);
+    // Nota: El historial de fondos se maneja localmente y por Supabase si se implementa la tabla fund_adjustments
+    
+    setState(prev => ({
+      ...prev,
+      availableFunds: newFunds,
+      fundsHistory: [...prev.fundsHistory, adjustment],
+      timeline: [{
+        id: `t${Date.now()}`,
+        clientId: 'system',
+        type: 'FUNDS_ADDED',
+        date: adjustment.date,
+        description: `Inyección de capital: $${amount.toLocaleString()}. ${notes}`,
+        amount: amount
+      }, ...prev.timeline]
+    }));
+  };
+
+  const handleApproveRequest = async (reqId: string) => {
+    const req = state.loanRequests.find(r => r.id === reqId);
+    if (!req) return;
+
+    const client = state.clients.find(c => c.nationalId === req.nationalId);
+    if (!client) {
+      alert("Error: El cliente no existe en la base de datos.");
+      return;
+    }
+
+    if (state.availableFunds < req.amount) {
+      alert("Fondos insuficientes para aprobar esta solicitud.");
+      return;
+    }
+
+    const newLoan: Loan = {
+      id: `l${Date.now()}`,
+      clientId: client.id,
+      amount: req.amount,
+      interestRate: 0,
+      term: 1,
+      frequency: 'MONTHLY',
+      startDate: new Date().toISOString().split('T')[0],
+      status: 'ACTIVE',
+      totalPaid: 0,
+      totalOwed: req.amount
+    };
+
+    await addLoan(newLoan);
+    // Actualizar estado de la solicitud localmente
+    setState(prev => ({
+      ...prev,
+      loanRequests: prev.loanRequests.map(r => r.id === reqId ? { ...r, status: 'APPROVED' } : r)
+    }));
+  };
+
+  const handleRejectRequest = (reqId: string) => {
+    setState(prev => ({
+      ...prev,
+      loanRequests: prev.loanRequests.map(r => r.id === reqId ? { ...r, status: 'REJECTED' } : r)
+    }));
+  };
+
+  const handleSubmitLoanRequest = (req: LoanRequest) => {
+    setState(prev => ({
+      ...prev,
+      loanRequests: [...prev.loanRequests, req],
+      timeline: [{
+        id: `t${Date.now()}`,
+        clientId: req.nationalId,
+        type: 'LOAN_REQUEST',
+        date: req.date,
+        description: `Nueva solicitud de crédito recibida por $${req.amount.toLocaleString()}.`,
+        amount: req.amount
+      }, ...prev.timeline]
+    }));
+  };
+
   const renderContent = () => {
     if (selectedClient) return <ClientDetail client={selectedClient} state={state} onBack={() => setSelectedClient(null)} />;
 
     switch (currentTab) {
       case 'dashboard': return <Dashboard state={state} onGoToRequests={() => setCurrentTab('loans')} />;
       case 'clients': return <ClientManager state={state} addClient={registerClient} deleteClient={deleteClient} onSelectClient={setSelectedClient} />;
-      case 'loans': return <LoanManager state={state} addLoan={addLoan} onApproveRequest={() => {}} onRejectRequest={() => {}} />;
+      case 'loans': return <LoanManager state={state} addLoan={addLoan} onApproveRequest={handleApproveRequest} onRejectRequest={handleRejectRequest} />;
       case 'payments': return <PaymentManager state={state} onAddPayment={addPayment} />;
-      case 'funds': return <FundsManager state={state} onAddFunds={(a) => {}} />;
+      case 'funds': return <FundsManager state={state} onAddFunds={handleAddFunds} />;
       case 'admins': return <AdminManager state={state} onAddAdmin={(a) => setState(p => ({...p, admins:[...p.admins, a]}))} onDeleteAdmin={(id) => setState(p => ({...p, admins:p.admins.filter(x => x.id !== id)}))} />;
       case 'automation': return <AutomationPanel state={state} />;
       default: return <Dashboard state={state} onGoToRequests={() => setCurrentTab('loans')} />;
@@ -188,7 +261,7 @@ const App: React.FC = () => {
   }
 
   if (view === 'LOGIN') return <LoginForm admins={state.admins} onLogin={handleLogin} onGoToPortal={() => setView('PORTAL')} />;
-  if (view === 'PORTAL') return <ClientPortal state={state} onGoBack={() => setView('LOGIN')} onRegisterClient={registerClient} onSubmitRequest={() => {}} />;
+  if (view === 'PORTAL') return <ClientPortal state={state} onGoBack={() => setView('LOGIN')} onRegisterClient={registerClient} onSubmitRequest={handleSubmitLoanRequest} />;
 
   return (
     <div className="h-screen flex bg-slate-50 overflow-hidden">
